@@ -1,9 +1,12 @@
 from xmlrpc.client import Boolean
 from pynput.keyboard import Listener
 from pynput import keyboard
+import subprocess
 import time
 import os
 import math
+
+#from subprocess import call
 
 # ---------------------------------------
 # BRIGHTNESS ADJUST
@@ -17,16 +20,36 @@ import math
 # PLEASE DON'T USE THIS PIECE OF SH*T
 # PLEASE
 
-newBrightness = 0.5
-currentBrightness = 0.5
+BACKLIGHT_LOCATION = "/sys/class/backlight/intel_backlight/"
+MAX_BRIGHTNESS = 7500   # automatic this number means nothing
+
+newBrightness = 0.0
+currentBrightness = 0.0
 
 # i was gonna use threads but it doesnt work and it sucks
 changeThreadIsRunning = False
 
 tick = 0
 
-#this literally does nothing
+# this literally does nothing
 TEST_MODE = False
+
+def command(c):
+    x = subprocess.check_output([c], shell=True)
+    s = ""
+    for i in x:
+        s += chr(i)
+    return s
+
+
+def setup():
+    MAX_BRIGHTNESS    = float(command("cat "+BACKLIGHT_LOCATION+"max_brightness"))
+    currentBrightness = math.sqrt(float(command("cat "+BACKLIGHT_LOCATION+"actual_brightness")) / MAX_BRIGHTNESS)
+    newBrightness     = currentBrightness
+    return MAX_BRIGHTNESS, currentBrightness
+    
+    
+
 
 # this changes the brightness smoothly
 # i tried to make it multithreaded so that you can hold down the brightness change button without
@@ -36,7 +59,6 @@ TEST_MODE = False
 def gradBrightnessChange():
 
     # on my tablop anyways, I can't be arsed learning how to read the max brightness from system lmao
-    MAX_BRIGHTNESS = 7500
 
     # ignore this this is useless
     global tick
@@ -46,6 +68,7 @@ def gradBrightnessChange():
 
     global changeThreadIsRunning
     changeThreadIsRunning = True
+
     
 
     # calculate brightness difference
@@ -81,7 +104,7 @@ def gradBrightnessChange():
 
         # run the command thing that changes the system light. You better not require a password
         # when running sudo or everything breaks huehue.
-        os.system("echo "+str(v)+" | sudo tee /sys/class/backlight/intel_backlight/brightness")
+        os.system("echo "+str(v)+" | sudo tee "+BACKLIGHT_LOCATION+"brightness")
 
         # "why don't you just run the script as sudo root?"
         # I CANT BECAUSE OF THIS GOD DAMN THING AJSKLDFHASD
@@ -108,33 +131,44 @@ def gradBrightnessChange():
 
 # amongus
 
+releasedKey = True
 
 def on_press(key):
     global newBrightness
+    global releasedKey
 
-    # read key. F1 and F2 are encoded in this weird string thing.
-    # If you wanna set your own custom keys do it yourself huehue
-    if (str(key) == "<269025026>"):
-        #print("brightness up")
-        newBrightness += 0.05
-        if (newBrightness > 1.0):
-            newBrightness = 1.0
-        gradBrightnessChange()
-        
-    # Why are you still looking at this.
+    if (releasedKey):
+        # read key. F1 and F2 are encoded in this weird string thing.
+        # If you wanna set your own custom keys do it yourself huehue
+        if (str(key) == "<269025026>"):
+            #print("brightness up")
+            newBrightness += 0.05
+            if (newBrightness > 1.0):
+                newBrightness = 1.0
+            gradBrightnessChange()
+            
+        # Why are you still looking at this.
 
-    if (str(key) == "<269025027>"):
-        #print("Brightness down")
-        newBrightness -= 0.05
-        if (newBrightness < 0.0):
-            newBrightness = 0.0
-        gradBrightnessChange()
-    #print(str(key) + " key pressed")
+        if (str(key) == "<269025027>"):
+            #print("Brightness down")
+            newBrightness -= 0.05
+            if (newBrightness < 0.0):
+                newBrightness = 0.0
+            gradBrightnessChange()
+        #print(str(key) + " key pressed")
+        releasedKey = False
 
 # Literally does nothing
 def on_release(key):
-    pass
+    global releasedKey
+    releasedKey = True
 
+
+MAX_BRIGHTNESS, currentBrightness = setup()
+newBrightness = currentBrightness
+
+print("max_brightness:      "+str(MAX_BRIGHTNESS))
+print("current_brightness:  "+str(currentBrightness))
 
 # Listener event thing to listen to keys when they're pressed.
 with Listener(on_press=on_press, on_release=on_release) as listener:
@@ -146,3 +180,4 @@ with Listener(on_press=on_press, on_release=on_release) as listener:
 
 # if u really run this shit
 # $ python3 brightness.py
+
